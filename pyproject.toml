@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name="polyglot-doc-workflow"
+version="2026.0.0"
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "sqlalchemy>=2.0.30",
+    "alembic>=1.13.0",
+    "psycopg[binary]>=3.1.19",   # psycopg3 — modern Postgres driver
+    "python-magic>=0.4.27",
+    "pymupdf>=1.24.0",            # PDF extraction (fitz)
+    "python-docx>=1.1.0",
+    "python-multipart>=0.0.9",    # FastAPI multipart upload support
+]
+requires-python=">=3.11"
+authors=[{name="Nazgul Sagatova", email="naziko6a.89@gmail.com"}]
+description="Polyglot document workflow: python RAG ingestion + Java Spring Boot metadata management"
+readme="README.md"
+
+# Source - https://stackoverflow.com/a/72547402
+# Posted by Warm_Duscher, modified by community. See post 'Timeline' for change history
+# Retrieved 2026-05-15, License - CC BY-SA 4.0
+#[tool.setuptools]
+#py-modules = []
+
+#OR use the following to replace lines 29-30
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "alembic*"] #maybe you don't even need alembic* as the folder is generated after running command alembic init alembic
+
+# pyproject.toml
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
