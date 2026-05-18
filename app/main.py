@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.routers import ingest
+from app.routers import chunks
 
 
 def create_app() -> FastAPI:
@@ -15,6 +16,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(ingest.router)
+    app.include_router(chunks.router)
 
     @app.get("/health", tags=["ops"])
     def health() -> dict:

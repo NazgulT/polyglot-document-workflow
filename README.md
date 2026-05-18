@@ -1,17 +1,23 @@
 # Polyglot Document Workflow
 
-A document ingestion pipeline built with **FastAPI** and **PostgreSQL** that accepts PDF, DOCX, and plain-text files, extracts their text content, and deduplicates by content hash — designed as Step 1 of a polyglot RAG (Retrieval-Augmented Generation) system.
+A document ingestion and chunking pipeline built with **FastAPI** and **PostgreSQL + pgvector** that accepts PDF, DOCX, and plain-text files, extracts their text, splits it into semantic chunks, and stores vector embeddings — designed as the Python backend of a polyglot RAG (Retrieval-Augmented Generation) system.
 
 ---
 
 ## What It Does
 
-Upload a document via HTTP and the pipeline will:
+**Phase 1 — Ingestion:** Upload a document and the pipeline will:
 
-1. **Validate** file size and detect the MIME type from raw bytes (never from filename)
-2. **Fingerprint** the content with SHA-256 and skip storage if the document already exists
+1. **Validate** file size and detect MIME type from raw bytes (never from filename)
+2. **Fingerprint** content with SHA-256 and skip storage if the document already exists
 3. **Extract** clean UTF-8 text using a format-specific extractor (PDF via PyMuPDF, DOCX via python-docx, plain text natively)
-4. **Persist** the record in PostgreSQL and return a structured response with `doc_id`, `status`, and `char_count`
+4. **Persist** the record in PostgreSQL and return `doc_id`, `status`, and `char_count`
+
+**Phase 2 — Chunking & Embedding:** POST to chunk an ingested document and the pipeline will:
+
+5. **Split** extracted text into overlapping chunks using one of three strategies
+6. **Embed** each chunk via `all-MiniLM-L6-v2` (384-dim, local, no API key needed)
+7. **Store** chunks with `char_offset`, `token_count`, and a `vector(384)` embedding in Postgres
 
 | Supported Format | MIME Type |
 |---|---|
@@ -19,14 +25,22 @@ Upload a document via HTTP and the pipeline will:
 | DOCX | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |
 | Plain text | `text/plain` |
 
+| Chunking Strategy | Description |
+|---|---|
+| `fixed` | Fixed character window with configurable overlap |
+| `sentence_window` | Sliding window over NLTK sentences |
+| `recursive` | Recursive split by `\n\n` → `\n` → `.` → ` ` |
+
 ---
 
 ## Key Features
 
 - **Content-addressed deduplication** — SHA-256 of raw bytes; re-uploading the same file returns the existing record instantly
 - **Byte-level MIME detection** — rejects misnamed files before any processing occurs
-- **Pluggable extractors** — add new formats by implementing the `TextExtractor` protocol in [app/extractors/](app/extractors/)
-- **Integration-tested** — tests run against a real Postgres instance (`docworkflow_test`); no mocks
+- **Three chunking strategies** — fixed, sentence-window, and recursive; re-chunking replaces existing chunks, never appends
+- **Local embeddings** — `all-MiniLM-L6-v2` via `sentence-transformers`; 384-dim vectors stored in pgvector
+- **Pluggable extractors** — add new formats by implementing `TextExtractor` in [app/extractors/](app/extractors/)
+- **Integration-tested** — all tests hit a real Postgres instance (`docworkflow_test`); no mocks
 - **20 MB upload limit** by default, configurable via `MAX_UPLOAD_BYTES`
 
 ---
@@ -36,10 +50,12 @@ Upload a document via HTTP and the pipeline will:
 ### Prerequisites
 
 - Python ≥ 3.11
-- PostgreSQL running locally with two databases:
+- PostgreSQL running locally with the `pgvector` extension available, and two databases:
   ```sql
   CREATE DATABASE docworkflow;
   CREATE DATABASE docworkflow_test;
+  -- Run once in each database:
+  CREATE EXTENSION IF NOT EXISTS vector;
   ```
 
 ### Installation
@@ -108,6 +124,27 @@ curl -X POST http://localhost:8000/documents/ingest \
 }
 ```
 
+### Chunk and embed a document
+
+```bash
+curl -X POST http://localhost:8000/documents/<doc_id>/chunks \
+  -H "Content-Type: application/json" \
+  -d '{"strategy": "fixed", "embedding_dimensions": 384, "chunk_size": 1000, "overlap": 100}'
+```
+
+**Response:**
+```json
+{
+  "doc_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "chunk_count": 12,
+  "strategy": "fixed",
+  "embedding_dimensions": 384,
+  "message": "Document chunked and embedded successfully."
+}
+```
+
+Calling the endpoint again on the same document **replaces** existing chunks — it does not append.
+
 ### Health check
 
 ```bash
@@ -146,20 +183,24 @@ All settings are read from `.env`. See [.env.example](.env.example) for required
 
 ```
 app/
-├── routers/ingest.py       # POST /documents/ingest — full pipeline
+├── routers/
+│   ├── ingest.py           # POST /documents/ingest — ingestion pipeline
+│   └── chunks.py           # POST /documents/{id}/chunks — chunking + embedding
+├── services/
+│   └── chunking_service.py # Orchestrates chunker → embedder → repository
+├── chunkers/               # Chunking strategies (fixed, sentence_window, recursive)
+├── embeddings/             # Embedding provider (local sentence-transformers)
 ├── extractors/             # One extractor per MIME type
-│   ├── base.py             # TextExtractor protocol + ExtractionError
-│   ├── pdf.py
-│   ├── docx.py
-│   └── plain.py
-├── models/                 # SQLAlchemy ORM models
-├── repositories/           # DB query layer
-├── schemas/document.py     # Pydantic request/response schemas
+├── models/                 # SQLAlchemy ORM models (Document, Chunk)
+├── repositories/           # DB query layer (DocumentRepository, ChunkRepository)
+├── schemas/                # Pydantic request/response schemas
 └── config.py               # Settings (pydantic-settings)
 alembic/versions/           # Migration history
 tests/
-├── conftest.py             # Test DB setup and fixtures
-└── test_ingest.py
+├── conftest.py             # Test DB setup and shared fixtures
+├── test_ingest.py          # Phase 1 integration tests
+├── test_chunkers.py        # Phase 2 chunker unit tests (no DB)
+└── test_chunking_endpoint.py  # Phase 2 endpoint integration tests
 ```
 
 ---

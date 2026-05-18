@@ -3,7 +3,7 @@
 import io
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app.main import create_app
@@ -32,6 +32,9 @@ TestSessionLocal = sessionmaker(bind=test_engine, autocommit=False, autoflush=Fa
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db():
+    with test_engine.connect() as connection:
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        connection.commit()
     Base.metadata.create_all(bind=test_engine)
     yield
     Base.metadata.drop_all(bind=test_engine)
