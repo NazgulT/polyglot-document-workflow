@@ -4,7 +4,7 @@ import uuid
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from app.types import DocumentChunk
+    from app.schemas.chunk import DocumentChunk
 else:
     DocumentChunk = Any
 

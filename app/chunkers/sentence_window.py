@@ -1,7 +1,10 @@
 from typing import List, Dict
+import uuid
 
 import nltk
 from nltk.tokenize import sent_tokenize
+
+from app.schemas.chunk import DocumentChunk
 
 nltk.download("punkt", quiet=True)
 
@@ -10,9 +13,9 @@ class SentenceWindowChunker:
     def __init__(self, window_size: int = 5):
         self.window_size = window_size
 
-    def chunk(self, text: str) -> List[Dict[str, int]]:
+    def split(self, text: str, doc_id: uuid.UUID) -> List[DocumentChunk]:
         sentences = sent_tokenize(text)
-        chunks: List[Dict[str, int]] = []
+        chunks: List[DocumentChunk] = []
 
         current_offset = 0
         for start in range(len(sentences) - self.window_size + 1):
@@ -30,6 +33,6 @@ class SentenceWindowChunker:
                         char_offset = 0
 
             current_offset = char_offset + len(first_sentence)
-            chunks.append({"text": chunk_text, "char_offset": char_offset})
+            chunks.append(DocumentChunk(text=chunk_text, char_offset=char_offset, token_count=0, doc_id=doc_id))
 
         return chunks

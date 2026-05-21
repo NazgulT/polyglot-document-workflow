@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
+import uuid
 
 import tiktoken
+
+from app.chunkers.base import ChunkingError
+from app.schemas.chunk import DocumentChunk
 
 
 class FixedSizeChunker:
@@ -20,7 +24,7 @@ class FixedSizeChunker:
         self.chunk_overlap = chunk_overlap
         self._encoding = tiktoken.get_encoding(encoding_name)
 
-    def split_text(self, text: str) -> List[Dict[str, Any]]:
+    def split(self, text: str, doc_id: uuid.UUID) -> List[DocumentChunk]:
         """Return a list of chunks with text, char_offset, and token_count."""
         if text is None:
             text = ""
@@ -29,22 +33,28 @@ class FixedSizeChunker:
         if step <= 0:
             raise ValueError("chunk_size must be greater than chunk_overlap")
 
-        chunks: List[Dict[str, Any]] = []
+        chunks: List[DocumentChunk] = []
         text_length = len(text)
 
-        for start in range(0, text_length, step):
-            window = text[start : start + self.chunk_size].strip()
-            if not window:
-                continue
 
-            token_count = len(self._encoding.encode(window))
-            chunks.append({
-                "text": window,
-                "char_offset": start,
-                "token_count": token_count,
-            })
+        try:
+            
+            for start in range(0, text_length, step):
+                window = text[start : start + self.chunk_size].strip()
+                if not window:
+                    continue
 
-            if start + self.chunk_size >= text_length:
-                break
+                token_count = len(self._encoding.encode(window))
+                chunks.append(DocumentChunk(
+                    text=window,
+                    char_offset=start,
+                    token_count=token_count,
+                    doc_id=doc_id
+                ))
+
+                if start + self.chunk_size >= text_length:
+                    break
+        except Exception as e:
+            raise ChunkingError(f"Error during  Fixed-Size chunking: {e}")
 
         return chunks

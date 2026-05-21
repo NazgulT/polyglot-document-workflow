@@ -23,6 +23,8 @@ dependencies = [
     "nltk>=3.8.0",                    # sentence tokeniser used by SentenceWindowChunker
     "tiktoken>=0.7.0",                # token counting (matches OpenAI/Claude tokenisation)
     "pgvector>=0.3.0",                # Vector column type for SQLAlchemy + psycopg3
+    "streamlit>=1.35.0",     # testing UI
+    "httpx>=0.27.0",         # Streamlit → FastAPI HTTP calls
 ]
 requires-python=">=3.11"
 authors=[{name="Nazgul Sagatova", email="naziko6a.89@gmail.com"}]

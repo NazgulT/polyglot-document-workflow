@@ -1,4 +1,3 @@
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
@@ -6,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.embeddings import get_default_provider
 from app.models.document import Document
 from app.schemas.chunk import ChunkingConfig as ServiceConfig
 from app.services.chunking_service import ChunkingService
@@ -15,9 +15,8 @@ router = APIRouter()
 
 class ChunkingConfig(BaseModel):
     strategy: str = Field(..., description="Chunking strategy to use")
-    embedding_dimensions: int = Field(..., gt=0, description="Embedding vector dimensions")
-    chunk_size: Optional[int] = Field(1000, gt=0, description="Approximate maximum size of each chunk")
-    overlap: Optional[int] = Field(0, ge=0, description="Number of characters to overlap between chunks")
+    chunk_size: int = Field(1000, gt=0, description="Approximate maximum size of each chunk")
+    chunk_overlap: int = Field(0, ge=0, description="Number of characters to overlap between chunks")
 
 
 class ChunkingResponse(BaseModel):
@@ -44,10 +43,12 @@ def create_document_chunks(
             detail="Document not found",
         )
 
+    provider = get_default_provider()
+
     service_config = ServiceConfig(
         strategy=config.strategy.strip(),
         chunk_size=config.chunk_size,
-        chunk_overlap=config.overlap,
+        chunk_overlap=config.chunk_overlap,
     )
 
     chunks = ChunkingService(db).process_document(doc_id, service_config)
@@ -56,6 +57,6 @@ def create_document_chunks(
         doc_id=doc_id,
         chunk_count=len(chunks),
         strategy=service_config.strategy,
-        embedding_dimensions=config.embedding_dimensions,
+        embedding_dimensions=provider.dimensions,
         message="Document chunked and embedded successfully.",
     )
