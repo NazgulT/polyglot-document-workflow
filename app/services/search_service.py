@@ -1,9 +1,9 @@
 
 
 
-from time import time
+from time import perf_counter
 
-from fastapi import logger
+import logging
 from sqlalchemy.orm import Session
 
 from app.embeddings.base import EmbeddingProvider
@@ -14,6 +14,7 @@ from app.repositories.chunk import ChunkRepository
 
 import uuid
 
+logger = logging.getLogger(__name__)
 
 class SearchService:
     def __init__(self, db: Session, vector_store: VectorStore, embedding_provider: EmbeddingProvider):
@@ -30,11 +31,11 @@ class SearchService:
         and provider-swapping logic out of HTTP concerns.
         """
 
-        t0 = time.perf_counter()
+        t0 = perf_counter()
 
         query_embedding = self.embedding_provider.embed_batch([query.query])[0]
-        embedding_ms = (time.perf_counter() - t0) * 1000
-        results = self._store.search(
+        embedding_ms = (perf_counter() - t0) * 1000
+        results = self.vector_store.search(
             query_embedding=query_embedding,
             top_k=query.top_k,
             filters=query.filters,
@@ -61,7 +62,7 @@ class SearchService:
         the same vector store state, because PgVectorStore.upsert uses
         ON CONFLICT DO UPDATE.
         """
-        repo = ChunkRepository(self._db)
+        repo = ChunkRepository(self.db)
         chunks = repo.find_by_doc_id(doc_id)
 
         if not chunks:
@@ -78,10 +79,11 @@ class SearchService:
                 "Re-run the chunking step."
             )
 
-        count = self._store.upsert(chunks)
+        count = self.vector_store.upsert(chunks)
 
         return UpsertResponse(
             doc_id=doc_id,
+            success = True if count == len(chunks) else False,
             chunks_upserted=count,
             message=f"Successfully upserted {count} chunks into the vector store.",
         )

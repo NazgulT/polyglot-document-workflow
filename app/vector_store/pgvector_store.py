@@ -7,7 +7,6 @@ import uuid
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy import text, select
-from uvicorn import logging
 
 from app.models.chunk import Chunk
 from app.models.document import Document
@@ -24,7 +23,7 @@ class VectorStore:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def upsert(self, chunks:List["DocumentChunk"]) -> int:
+    def upsert(self, chunks:List[DocumentChunk]) -> int:
 
         """
         Insert chunks, updating all columns on conflict.
@@ -63,10 +62,10 @@ class VectorStore:
             ) 
 
             result = self.db.execute(statement)
-            count = result.rowcount
+            #count = result.rowcount
             self.db.commit()
-            logger.info("Upserted %d chunks for doc_id=%s", count, chunks[0].doc_id)
-            return count or 0
+            logger.info("Upserted %d chunks for doc_id=%s", len(rows), chunks[0].doc_id)
+            return len(rows)
         except Exception as e:
             self.db.rollback()
             logger.info("Failed to upsert chunks for doc_id=%s: %s", chunks[0].doc_id, str(e))
@@ -106,7 +105,7 @@ class VectorStore:
             if filters.doc_ids:
                 stmt = stmt.where(Chunk.doc_id.in_(filters.doc_ids))
 
-            rows = self._db.execute(stmt).fetchall()
+            rows = self.db.execute(stmt).fetchall()
 
         except Exception as exc:
             logger.exception("Search query failed")
@@ -141,14 +140,14 @@ class VectorStore:
     def delete_by_doc_id(self, doc_id: uuid.UUID) -> int:
         """Delete all chunks for a document. Used before re-chunking."""
         try:
-            result = self._db.execute(
+            result = self.db.execute(
                 text("DELETE FROM chunks WHERE doc_id = :doc_id"),
                 {"doc_id": str(doc_id)},
             )
-            self._db.commit()
+            self.db.commit()
             count = result.rowcount
             logger.info("Deleted %d chunks for doc_id=%s", count, doc_id)
             return count
         except Exception as exc:
-            self._db.rollback()
+            self.db.rollback()
             raise VectorStoreError(f"Delete failed: {exc}") from exc

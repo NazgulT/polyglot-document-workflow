@@ -28,16 +28,16 @@ class SearchResult(BaseModel):
     char_offset: int = Field(..., description="The character offset of the chunk in the original document")
     score: float = Field(..., description="The relevance score of the result. The cosine similarity score.")
     text: str = Field(..., description="The text of the chunk that matched the search query")
+    filename: str = Field(..., description="The filename of the document that the chunk belongs to")
 
 class SearchResponse(BaseModel):
     query: str = Field(..., description="The original search query")
     query_embedding_ms: float = Field(..., description="Time taken to compute the query embedding in milliseconds")
+    result_count: int = Field(..., description="Total number of results returned")
     results: List[SearchResult] = Field(..., description="The list of search results")
 
 class UpsertRequest(BaseModel):
     doc_id: uuid.UUID = Field(..., description="The ID of the document to upsert")
-    text: str = Field(..., description="The text content of the document to upsert")
-    strategy: str = Field(..., description="The chunking strategy to use for this document. One of 'fixed', 'sentence_window', or 'recursive'") 
 
 class UpsertResponse(BaseModel):
     doc_id: uuid.UUID = Field(..., description="The ID of the document that was upserted")
